@@ -33,7 +33,7 @@ class MyRobot:
 
     PROTOCOL_VERSION = 1.0
     BAUDRATE = 1000000
-    DEVICENAME = "COM5"              # e.g., Windows: 'COM3' | Linux: '/dev/ttyUSB0' | Mac: '/dev/tty.usbserial-*'
+    DEVICENAME = "COM3"              # e.g., Windows: 'COM3' | Linux: '/dev/ttyUSB0' | Mac: '/dev/tty.usbserial-*'
 
     TORQUE_ENABLE = 1
     TORQUE_DISABLE = 0
@@ -41,6 +41,12 @@ class MyRobot:
     DXL_MOVING_STATUS_THRESHOLD = 10  # [ticks], not used directly here
     TICKS_PER_DEG = 1.0 / 0.29        # ≈ 3.448275862 ticks per degree
     DEG_PER_TICK = 0.29
+
+    # Link dimensions from the DH model [mm]
+    D1 = 50.0
+    A2 = 93.0
+    A3 = 93.0
+    A4 = 50.0
 
     # ------------------------------- Init -------------------------------------
     def __init__(self):
@@ -212,8 +218,70 @@ class MyRobot:
         return j_a
 
     # --------------------------- Kinematics (FK / IK) -------------------------
-   # Please input your forward and inverse kinematics here for position and pose conversion to joint angles.
-   #  The output should be in the format of an array
+    def forward(self, j1_deg, j2_deg, j3_deg, j4_deg):
+        """Return the base-to-end-effector transform for joint angles in degrees."""
+        q1, q2, q3, q4 = np.radians([j1_deg, j2_deg, j3_deg, j4_deg])
+
+        transform = np.array([
+            [
+                -math.cos(q1) * math.sin(q2 + q3 + q4),
+                -math.cos(q1) * math.cos(q2 + q3 + q4),
+                math.sin(q1),
+                math.cos(q1) * (
+                    -self.A2 * math.sin(q2)
+                    - self.A3 * math.sin(q2 + q3)
+                    - self.A4 * math.sin(q2 + q3 + q4)
+                ),
+            ],
+            [
+                -math.sin(q1) * math.sin(q2 + q3 + q4),
+                -math.sin(q1) * math.cos(q2 + q3 + q4),
+                -math.cos(q1),
+                math.sin(q1) * (
+                    -self.A2 * math.sin(q2)
+                    - self.A3 * math.sin(q2 + q3)
+                    - self.A4 * math.sin(q2 + q3 + q4)
+                ),
+            ],
+            [
+                math.cos(q2 + q3 + q4),
+                -math.sin(q2 + q3 + q4),
+                0.0,
+                self.D1
+                + self.A2 * math.cos(q2)
+                + self.A3 * math.cos(q2 + q3)
+                + self.A4 * math.cos(q2 + q3 + q4),
+            ],
+            [0.0, 0.0, 0.0, 1.0],
+        ])
+        self.forward_transform = transform
+        return transform
+
+    def inverse(self, x, y, z, pitch_deg):
+        """Return elbow-up joint angles in degrees for a pose in millimetres."""
+        psi = math.radians(pitch_deg)
+        q1 = math.atan2(y, x)
+
+        radius = math.hypot(x, y)
+        wrist_radius = radius - self.A4 * math.cos(psi)
+        wrist_height = z - self.D1 - self.A4 * math.sin(psi)
+        elbow_cosine = (
+            wrist_radius**2 + wrist_height**2 - self.A2**2 - self.A3**2
+        ) / (2 * self.A2 * self.A3)
+        if elbow_cosine < -1.0 - 1e-12 or elbow_cosine > 1.0 + 1e-12:
+            raise ValueError("Target position is outside the robot's reachable workspace")
+
+        elbow_cosine = self.clamp(elbow_cosine, -1.0, 1.0)
+        q3 = -math.acos(elbow_cosine)
+        q2_dh = math.atan2(wrist_height, wrist_radius) - math.atan2(
+            self.A3 * math.sin(q3),
+            self.A2 + self.A3 * math.cos(q3),
+        )
+        q4 = psi - q2_dh - q3
+        q2 = q2_dh - math.pi / 2
+
+        return np.degrees(np.array([q1, q2, q3, q4], dtype=float))
+
 
     # ------------------------------- Motion -----------------------------------
     def move_j(self, j1_deg, j2_deg, j3_deg, j4_deg, wait=True, tol_deg=2.0, poll_period=0.05):
@@ -304,7 +372,7 @@ class MyRobot:
 # Demonstrates how to move the robot joints into desired joint positions [degrees]
 # You might need to adjust the offsets in the code above to make the zero point suit your needs.
 # Just comment out the code snippet, input desired joint angles in robot.move_j() and run.
-'''
+
 if __name__ == "__main__":
     robot = MyRobot()
     if robot.init_status:
@@ -316,17 +384,30 @@ if __name__ == "__main__":
 
 
             # Example motions:
-            robot.move_j(-12.02, -7.99, -95.76, 13.75) #Degrees
-
-            robot.record_configuration()
-
+            #joint_angles = robot.inverse(236.0, 0.0, 50.00, 0.0)  # x, y, z, pitch
+            #robot.move_j(*joint_angles) #Degrees
+            #robot.forward(*robot.joint_angles)
+            #joint_angles = robot.inverse(0, 0.0, 0, 0.0)  # x, y, z, pitch
+            #robot.forward(0.0, 0.0, 0, 0.0)
+            #joint_angles = robot.inverse(0.0, 0.0, , 0.0)  # x, y, z, pitch
+            #robot.move_j(*joint_angles) #Degrees
+            
+            inverse_angles = robot.inverse(236.0, 0.0, 50.00, 0.0)  # x, y, z, pitch
+            angle = [0,0,90,0]
+            robot.move_j(*angle)
+            forward_transform = robot.forward(*angle)
+            print("Forward transform:\n", forward_transform)
+            
+            #print("Forward transform:\n", forward_transform)
+            joint_angles = robot.read_joint_angles()
+            
             # Play it back
             #robot.play_configuration_history()
 
         finally:
             pass
             #robot.disable_motors()
-'''
+
 #Example 2:
 #Demonstrates how to move the robot joints into desired a list of joint positions [degrees]
 #You might need to adjust the offsets in the code above to make the zero point suit your needs.
