@@ -25,7 +25,7 @@ class CameraCalibration:
 
 
     def getCorners(self):
-        img = glob.glob('imgs/*.png')
+        img = glob.glob('Python/imgs/*.png')
         print("Found {} images for calibration.".format(len(img)))
 
         for fname in img:
@@ -138,5 +138,6 @@ class CameraCalibration:
 if __name__ == "__main__":
     calibrator = CameraCalibration()
     calibrator.getCorners()
+    calibrator.calibrateCamera()
     calibrator.computeReprojectionError()
     calibrator.visualizeImages()
