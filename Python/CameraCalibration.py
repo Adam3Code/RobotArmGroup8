@@ -5,7 +5,11 @@ Camera calibration loop, used to find the intrinsic and extrinsic parameters.
 import numpy as np
 import cv2
 import glob
+import os
 import matplotlib.pyplot as plt
+
+# Image folder next to this script, so it works no matter where you run it from
+IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'imgs')
 
 class CameraCalibration:
     def __init__(self):
@@ -25,7 +29,7 @@ class CameraCalibration:
 
 
     def getCorners(self):
-        img = glob.glob('Python/imgs/*.png')
+        img = glob.glob(os.path.join(IMG_DIR, '*.png'))
         print("Found {} images for calibration.".format(len(img)))
 
         for fname in img:
@@ -121,23 +125,43 @@ class CameraCalibration:
         cv2.destroyAllWindows()
 
 
-    def captureImages(self):
-        cap = cv2.VideoCapture(0)
-        count = 0
+    def captureImages(self, camera_index=0):
+        os.makedirs(IMG_DIR, exist_ok=True)
+
+        # Continue numbering after existing images so nothing is overwritten
+        count = len(glob.glob(os.path.join(IMG_DIR, 'calibration_image_*.png')))
+
+        cap = cv2.VideoCapture(camera_index)
+        if not cap.isOpened():
+            print(f"Could not open camera {camera_index}.")
+            return
+
+        print(f"Saving images to: {IMG_DIR}")
+        print("Press 'c' to capture, 'q' to quit (click the video window first).")
         while True:
             ret, frame = cap.read()
+            if not ret:
+                print("Failed to read frame from camera.")
+                break
             cv2.imshow('frame', frame)
-            if cv2.waitKey(1) & 0xFF == ord('c'):
-                cv2.imwrite(f'imgs/calibration_image_{count}.png', frame)
-                count += 1
-            elif cv2.waitKey(1) & 0xFF == ord('q'):
+
+            key = cv2.waitKey(1) & 0xFF  # read the key once per frame
+            if key == ord('c'):
+                path = os.path.join(IMG_DIR, f'calibration_image_{count}.png')
+                if cv2.imwrite(path, frame):
+                    print(f"Saved {path}")
+                    count += 1
+                else:
+                    print(f"Failed to save {path}")
+            elif key == ord('q'):
                 break
         cap.release()
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     calibrator = CameraCalibration()
-    calibrator.getCorners()
-    calibrator.calibrateCamera()
-    calibrator.computeReprojectionError()
-    calibrator.visualizeImages()
+    calibrator.captureImages()
+    # calibrator.getCorners()
+    # calibrator.calibrateCamera()
+    # calibrator.computeReprojectionError()
+    # calibrator.visualizeImages()
