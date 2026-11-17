@@ -6,24 +6,22 @@ import imutils
 from matplotlib import pyplot as plt
 
 
-
-
-def captureImagesLive():
-        cap = cv2.VideoCapture(0)
-        count = 0
-        while True:
-            ret, frame = cap.read()
-            cv2.imshow('frame', frame)
-            if cv2.waitKey(1) & 0xFF == ord('c'):
-                cv2.imwrite(f'imgs/smarties_image_{count}.png', frame)
-                count += 1
-                return frame, count - 1
+# def captureImagesLive():
+#         cap = cv2.VideoCapture(0)
+#         count = 0
+#         while True:
+#             ret, frame = cap.read()
+#             cv2.imshow('frame', frame)
+#             if cv2.waitKey(1) & 0xFF == ord('c'):
+#                 cv2.imwrite(f'imgs/smarties_image_{count}.png', frame)
+#                 count += 1
+#                 return frame, count - 1
             
-            elif cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-        cap.release()
-        cv2.destroyAllWindows()
-        exit()
+#             elif cv2.waitKey(1) & 0xFF == ord('q'):
+#                 break
+#         cap.release()
+#         cv2.destroyAllWindows()
+#         exit()
 
 def undistortImage(count):
         # Load calibration data
