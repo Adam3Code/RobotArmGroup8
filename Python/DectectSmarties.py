@@ -29,7 +29,7 @@ def undistortImage(count):
             mtx = data['mtx']
             dist = data['dist']
 
-        img = image = cv2.imread(f'imgs/smarties_image_{count}.png')
+        img = cv2.imread(f'imgs/smarties_image_{count}.png')
         h, w = img.shape[:2]
         newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
@@ -107,9 +107,9 @@ def drawBox(mask, image):
         cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
     cv2.imshow("smarties detected", image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        cv2.destroyAllWindows()
+    
         
 if __name__ == "__main__":
 
@@ -130,13 +130,17 @@ if __name__ == "__main__":
             mask = getMask(dst)
             mask = erode(mask)
             mask = dilate(mask)
+            # cv2.imshow('mask', mask)
+
+
             centres = getCentres(mask)
 
             print(f"centres: {centres}")
 
             # #for display in report
-            # drawBox(mask,  dst)
+            drawBox(mask,  dst)
             count += 1
+            
 
         
         elif cv2.waitKey(1) & 0xFF == ord('q'):
