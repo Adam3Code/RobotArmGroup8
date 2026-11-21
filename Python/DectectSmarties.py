@@ -114,7 +114,7 @@ def drawBox(mask, image):
 if __name__ == "__main__":
 
     count = 0
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
 
     print("started video capture")
     

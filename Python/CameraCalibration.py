@@ -10,15 +10,19 @@ import matplotlib.pyplot as plt
 
 # Image folder next to this script, so it works no matter where you run it from
 IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'imgs')
+CALIBRATION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'calibration_data.npz')
 
 class CameraCalibration:
-    def __init__(self):
+    def __init__(self, square_size_mm=20.0):
         self.nb_vertical = 6
         self.nb_horizontal = 8
+        self.square_size = square_size_mm  # side length of one checkerboard square [mm]
 
-        # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+        # Object points in mm: (0,0,0), (20,0,0), (40,0,0) ....
+        # Scaling only affects the extrinsics (tvecs come out in mm); the intrinsics are unchanged.
         self.objp = np.zeros((self.nb_horizontal*self.nb_vertical,3), np.float32)
         self.objp[:,:2] = np.mgrid[0:self.nb_vertical,0:self.nb_horizontal].T.reshape(-1,2)
+        self.objp *= self.square_size
 
         # Arrays to store object points and image points from all the images.
         self.objpoints = [] # 3d point in real world space
@@ -57,27 +61,27 @@ class CameraCalibration:
             return None, None, None, None, None
 
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(self.objpoints, self.imgpoints, self.imgs[0].shape[1::-1], None, None)
-        np.savez('calibration_data.npz', mtx=mtx, dist=dist, rvecs=rvecs, tvecs=tvecs)
-        print("Calibration data saved to calibration_data.npz")
+        np.savez(CALIBRATION_FILE, mtx=mtx, dist=dist, rvecs=rvecs, tvecs=tvecs)
+        print(f"Calibration data saved to {CALIBRATION_FILE}")
 
 
     def undistortImage(self, img_path):
-        # Load calibration data
-        with np.load('calibration_data.npz') as data:
-            mtx = data['mtx']
-            dist = data['dist']
+            # Load calibration data
+            with np.load(CALIBRATION_FILE) as data:
+                mtx = data['mtx']
+                dist = data['dist']
 
-        img = cv2.imread(img_path)
-        h, w = img.shape[:2]
-        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
+            img = cv2.imread(img_path)
+            h, w = img.shape[:2]
+            newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
-        # Undistort
-        dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+            # Undistort
+            dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
 
-        # Crop the image
-        x, y, w, h = roi
-        dst = dst[y:y+h, x:x+w]
-        return dst
+            # Crop the image
+            x, y, w, h = roi
+            dst = dst[y:y+h, x:x+w]
+            return dst
 
 
     def computeReprojectionError(self):
@@ -85,7 +89,7 @@ class CameraCalibration:
             print("No object points or image points found. Cannot compute reprojection error.")
             return None
 
-        with np.load('calibration_data.npz') as data:
+        with np.load(CALIBRATION_FILE) as data:
             mtx = data['mtx']
             dist = data['dist']
             rvecs = data['rvecs']
@@ -125,14 +129,14 @@ class CameraCalibration:
         cv2.destroyAllWindows()
 
 
-    def captureImages(self, camera_index=0):
+    def captureImages(self, camera_index=1):
         os.makedirs(IMG_DIR, exist_ok=True)
 
         # Continue numbering after existing images so nothing is overwritten
         count = len(glob.glob(os.path.join(IMG_DIR, 'calibration_image_*.png')))
 
         cap = cv2.VideoCapture(camera_index)
-        if not cap.isOpened():
+        if not cap.isOpened():  
             print(f"Could not open camera {camera_index}.")
             return
 
@@ -160,8 +164,10 @@ class CameraCalibration:
 
 if __name__ == "__main__":
     calibrator = CameraCalibration()
-    calibrator.captureImages()
-    # calibrator.getCorners()
-    # calibrator.calibrateCamera()
-    # calibrator.computeReprojectionError()
-    # calibrator.visualizeImages()
+    #calibrator.captureImages()
+    calibrator.getCorners()
+    calibrator.calibrateCamera()
+    #calibrator.undistortImage()
+    calibrator.computeReprojectionError()
+    calibrator.visualizeImages()
+ 
